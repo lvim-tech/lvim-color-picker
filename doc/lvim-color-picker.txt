@@ -1,0 +1,118 @@
+*lvim-color-picker.txt*             Color picker, converter and inline highlighter
+
+==============================================================================
+CONTENTS                                               *lvim-color-picker-contents*
+
+  1. Introduction .................... |lvim-color-picker-introduction|
+  2. Requirements .................... |lvim-color-picker-requirements|
+  3. Setup ........................... |lvim-color-picker-setup|
+  4. Picker .......................... |lvim-color-picker-picker|
+  5. Converter ....................... |lvim-color-picker-converter|
+  6. Highlighter ..................... |lvim-color-picker-highlighter|
+  7. Configuration ................... |lvim-color-picker-config|
+  8. Health .......................... |lvim-color-picker-health|
+
+==============================================================================
+1. INTRODUCTION                                    *lvim-color-picker-introduction*
+
+Three color tools in one plugin, over one pure parse/convert/format core:
+
+  - picker       an interactive slider panel (lvim-ui chassis)
+  - converter    cycle a literal between hex / rgb() / hsl()
+  - highlighter  paint color literals inline in the buffer
+
+The core parses #rgb, #rrggbb, #rrggbbaa, rgb()/rgba(), hsl()/hsla(), 0x-hex
+and (gated) CSS named colors, and round-trips RGB<->HSL.
+
+==============================================================================
+2. REQUIREMENTS                                    *lvim-color-picker-requirements*
+
+  - Neovim >= 0.10
+  - lvim-ui       the picker panel + the palette select
+  - lvim-utils    the panel accents + the live palette for `p`
+
+==============================================================================
+3. SETUP                                                  *lvim-color-picker-setup*
+
+>lua
+    require("lvim-color-picker").setup({})
+<
+Installs the :LvimColorPicker command (subcommands pick / convert / highlight),
+the <Plug> maps, the highlighter auto-enable, and the panel accents (themed
+from the lvim-utils palette).
+
+==============================================================================
+4. PICKER                                                *lvim-color-picker-picker*
+
+>vim
+    :LvimColorPicker          " or :LvimColorPicker pick
+<
+A centered slider panel seeded from the color under the cursor. Keys:
+
+  j / k (Down/Up)   move between the sliders (R/G/B, H/S/L, C/M/Y/K, +A)
+  h / l             step the focused channel -1 / +1
+  H / L             step -5 / +5
+  <C-h> / <C-l>     step -10 / +10
+  =                 enter an exact value (lvim-ui input)
+  m                 cycle the [M]ode / slider model (rgb -> hsl -> cmyk)
+  o                 cycle the [O]utput syntax (hex -> rgb -> hsl -> cmyk)
+  a                 toggle the alpha (A) slider on / off
+  <CR>              insert / replace the seeded span at the cursor
+  y                 yank the formatted color
+  p                 insert from the live lvim-utils palette
+  q / <Esc>         cancel
+
+Each slider is a GRADIENT — every cell shows the actual color at that point
+(the H bar is a real rainbow), a hollow diamond ◊ marking the current value.
+The top band is a full-width preview swatch (composited over the theme bg by
+its alpha); below it the Mode/Output columns, then the sliders.
+
+==============================================================================
+5. CONVERTER                                          *lvim-color-picker-converter*
+
+>vim
+    :LvimColorPicker convert
+<
+Rewrites the literal under the cursor in the next syntax of `convert_cycle`
+(hex -> rgb() -> hsl() -> ...), preserving alpha. Dot-repeatable via the map: >lua
+
+    vim.keymap.set("n", "<leader>cc", "<Plug>(lvim-color-picker-convert)")
+<
+==============================================================================
+6. HIGHLIGHTER                                      *lvim-color-picker-highlighter*
+
+>vim
+    :LvimColorPicker highlight [on|off|toggle]
+<
+Paints color literals in the visible lines (only the on-screen range is
+scanned). Auto-enables in `highlighter.auto` filetypes. Style is `bg`
+(background tint), `fg` (text color) or `virtual` (a swatch chip before the
+literal). Per-color groups are lazy, cached, and flushed on :colorscheme.
+Named-color matching (`highlighter.named`) is off by default.
+
+==============================================================================
+7. CONFIGURATION                                         *lvim-color-picker-config*
+
+Defaults (mirrors lua/lvim-color-picker/config.lua): >lua
+
+    require("lvim-color-picker").setup({
+        picker = {
+            mode = "rgb",
+            output = "hex",
+            alpha = "auto",
+        },
+        highlighter = {
+            auto = { "css", "scss", "sass", "less", "html", "conf", "lua" },
+            style = "bg",
+            named = false,
+        },
+        convert_cycle = { "hex", "rgb", "hsl" },
+    })
+<
+==============================================================================
+8. HEALTH                                                *lvim-color-picker-health*
+
+`:checkhealth lvim-color-picker` reports the lvim-ui / lvim-utils dependency
+state and the configured picker / highlighter / converter settings.
+
+vim:tw=78:ts=8:ft=help:norl:
