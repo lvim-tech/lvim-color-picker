@@ -69,7 +69,7 @@ local function refresh(buf)
                 local grp = group_for(h.color)
                 if style == "virtual" then
                     pcall(api.nvim_buf_set_extmark, buf, ns, row, h.s, {
-                        virt_text = { { "󰝤 ", grp } },
+                        virt_text = { { config.highlighter.chip_icon, grp } },
                         virt_text_pos = "inline",
                     })
                 else

@@ -36,6 +36,8 @@ return {
         auto = { "css", "scss", "sass", "less", "html", "conf", "lua" },
         style = "bg",
         named = false,
+        -- The swatch glyph the `virtual` style paints before the literal (Nerd Font). Trailing space = gap.
+        chip_icon = "󰝤 ",
     },
     -- The converter rotation: `:LvimColorPicker convert` rewrites the literal under the cursor in the
     -- NEXT syntax of this list, wrapping around.
