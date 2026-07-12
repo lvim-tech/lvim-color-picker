@@ -64,6 +64,11 @@ inside the panel:
 **Mode and Output are independent** — `m` only changes which sliders you edit, `o` only the inserted
 format. The bracketed letter in the `[M]ode` / `[O]utput` titles is the toggle key.
 
+**Mouse:** left-click a point on a slider track to set that channel to the clicked position (the
+handle jumps there and the preview updates live, exactly like the step keys); clicking a slider row
+also focuses it. Click a `[M]ode` / `[O]utput` chip to select it directly. The footer actions are
+click targets too. A click is a no-op while `'mouse'` is empty.
+
 Each slider is a **gradient** — every cell is painted with the actual color at that point (so the `H`
 bar is a real rainbow), a hollow diamond `◊` marks the current value. Top to bottom: a full-width
 **preview swatch** of the current color (composited over the theme bg by its alpha); the `[M]ode` /

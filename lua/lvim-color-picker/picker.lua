@@ -100,6 +100,14 @@ local pan = nil
 local redraw = nil
 ---@type table<integer, integer>  panel row (1-based) → channel index
 local row_channel = {}
+---@type table<integer, { label_dw: integer, cells_n: integer, ch_idx: integer }>  slider row (1-based) →
+--- its track geometry, in DISPLAY columns (label width + cell count), for mouse hit-testing a click on the
+--- track. Display columns (not bytes) because the active-row label ` ▸R◂ ` is multibyte while an inactive
+--- `  R  ` is ASCII — same 5 cells, different byte width — so a byte offset would shift when the row activates.
+local slider_geom = {}
+---@type { row: integer, dc0: integer, dc1: integer, set: fun() }[]  the [M]ode / [O]utput chip click targets
+--- of the LAST render (row 1-based; dc0/dc1 = DISPLAY column range; `set` applies that chip).
+local chip_geom = {}
 ---@type "rgb"|"hsl"|"cmyk"|nil  the last-used slider mode, remembered across picker sessions (nil = use config)
 local last_mode = nil
 ---@type "hex"|"rgb"|"hsl"|"cmyk"|nil  the last-used output syntax, remembered across sessions
@@ -309,6 +317,8 @@ end
 ---@return string[], table[]
 local function render(width)
     row_channel = {}
+    slider_geom = {}
+    chip_geom = {}
     local lines, hls = {}, {}
     local function pad(s, w)
         return s .. string.rep(" ", math.max(0, w - vim.fn.strdisplaywidth(s)))
@@ -353,15 +363,15 @@ local function render(width)
     -- [M]ode group hugs the LEFT (2-space margin); [O]utput hugs the RIGHT (2-space margin); a │ divider
     -- sits ONE plain space after the mode group (and one before the output). Titles centered over each.
     local mode_btns = {
-        { t = " rgb ", on = st.mode == "rgb" },
-        { t = " hsl ", on = st.mode == "hsl" },
-        { t = " cmyk ", on = st.mode == "cmyk" },
+        { t = " rgb ", v = "rgb", on = st.mode == "rgb" },
+        { t = " hsl ", v = "hsl", on = st.mode == "hsl" },
+        { t = " cmyk ", v = "cmyk", on = st.mode == "cmyk" },
     }
     local out_btns = {
-        { t = " hex ", on = st.output == "hex" },
-        { t = " rgb ", on = st.output == "rgb" },
-        { t = " hsl ", on = st.output == "hsl" },
-        { t = " cmyk ", on = st.output == "cmyk" },
+        { t = " hex ", v = "hex", on = st.output == "hex" },
+        { t = " rgb ", v = "rgb", on = st.output == "rgb" },
+        { t = " hsl ", v = "hsl", on = st.output == "hsl" },
+        { t = " cmyk ", v = "cmyk", on = st.output == "cmyk" },
     }
     local SEP = 1
     local function group_width(btns)
@@ -382,17 +392,37 @@ local function render(width)
     lines[3] = build_row(2, tcells)
     -- buttons (row 4)
     local bcells = {}
-    local function emit_group(btns, x)
+    -- `kind` = "mode" | "output": clicking a chip applies that value directly (a superset of the m/o cycle
+    -- keys). `x` is a DISPLAY column and every chip glyph is single-width, so [x, x+#b.t) is its display span.
+    local function emit_group(btns, x, kind)
         for i, b in ipairs(btns) do
             if i > 1 then
                 x = x + SEP
             end
             set_cells(bcells, x, b.t, b.on and "LvimColorPickerChipOn" or "LvimColorPickerChipOff")
+            chip_geom[#chip_geom + 1] = {
+                row = 4, -- the button row (1-based)
+                dc0 = x,
+                dc1 = x + #b.t,
+                set = function()
+                    if kind == "mode" then
+                        if st.mode ~= b.v and redraw then
+                            st.mode = b.v
+                            last_mode = st.mode
+                            redraw(true) -- the channel count can change (cmyk has 4) → resize + repaint
+                        end
+                    elseif st.output ~= b.v and redraw then
+                        st.output = b.v
+                        last_output = st.output
+                        redraw(false)
+                    end
+                end,
+            }
             x = x + #b.t
         end
     end
-    emit_group(mode_btns, mode_x)
-    emit_group(out_btns, out_x)
+    emit_group(mode_btns, mode_x, "mode")
+    emit_group(out_btns, out_x, "output")
     bcells[sep_col] = { ch = "│", hl = "LvimColorPickerColTitle" }
     lines[4] = build_row(3, bcells)
     lines[5] = ""
@@ -416,7 +446,10 @@ local function render(width)
         local ls = #label
         -- the track fills to the right, reserving the last 7 columns for the value: 2 spaces + 3-wide
         -- number + 2 spaces
-        local cells_n = math.max(1, width - vim.fn.strdisplaywidth(label) - 7)
+        local label_dw = vim.fn.strdisplaywidth(label)
+        local cells_n = math.max(1, width - label_dw - 7)
+        -- Record the track geometry (DISPLAY columns) so a click on this row maps to a cell → a value.
+        slider_geom[rowidx] = { label_dw = label_dw, cells_n = cells_n, ch_idx = i }
         local point = math.max(1, math.min(cells_n, math.floor((v - chn.min) / (chn.max - chn.min) * cells_n + 0.5)))
         -- each cell is a glyph (█ or ◊), all 3 bytes wide, so the byte layout is uniform
         local cells = {}
@@ -616,6 +649,41 @@ function M.open()
             return 49, 5 + #channels()
         end,
         render = render,
+        -- MOUSE: a left-click on a slider sets that channel to the clicked position; a click on a [M]ode /
+        -- [O]utput chip selects it — mirroring the keyboard adjust (h/l steps, m/o cycles) and live-updating
+        -- the preview via the same `step`/`redraw` path. The chassis has already moved the (hidden) cursor to
+        -- the clicked row (so the row is focused + the ▸R◂ marker follows) and passes the 1-based `line` +
+        -- 0-based byte `col`. Hit-testing is in DISPLAY columns (the row has a multibyte label / │ divider), so
+        -- it maps to the exact cell. No-op off the track / any chip. `'mouse'` empty ⇒ never invoked.
+        ---@param _pan table
+        ---@param _st table
+        ---@param line integer  1-based clicked buffer row
+        ---@param col integer   0-based clicked byte column
+        on_click = function(_pan, _st, line, col)
+            local text = api.nvim_buf_get_lines(pan.buf, line - 1, line, false)[1] or ""
+            local dcol = vim.fn.strdisplaywidth(text:sub(1, col)) -- 0-based DISPLAY column of the clicked cell
+            local sg = slider_geom[line]
+            if sg then
+                local cell = dcol - sg.label_dw + 1 -- 1-based cell inside the track
+                if cell >= 1 and cell <= sg.cells_n then
+                    local chn = channels()[sg.ch_idx]
+                    if chn then
+                        local value = chn.min + (cell - 0.5) / sg.cells_n * (chn.max - chn.min)
+                        chn.set(math.max(chn.min, math.min(chn.max, value)))
+                        if redraw then
+                            redraw(false)
+                        end
+                    end
+                end
+                return
+            end
+            for _, chip in ipairs(chip_geom) do
+                if chip.row == line and dcol >= chip.dc0 and dcol < chip.dc1 then
+                    chip.set()
+                    return
+                end
+            end
+        end,
         keys = function(map, p, state)
             pan = p
             -- The close function lives on `state` (3rd arg), not the panel handle `p`.

@@ -67,6 +67,13 @@ Each slider is a GRADIENT — every cell shows the actual color at that point
 The top band is a full-width preview swatch (composited over the theme bg by
 its alpha); below it the Mode/Output columns, then the sliders.
 
+Mouse ~
+Left-click a point on a slider track to set that channel to the clicked
+position (the handle jumps there, preview updates live — like the step keys);
+clicking a slider row also focuses it. Click a [M]ode / [O]utput chip to select
+it directly. The footer actions are click targets too. No-op while 'mouse' is
+empty.
+
 ==============================================================================
 5. CONVERTER                                          *lvim-color-picker-converter*
 
