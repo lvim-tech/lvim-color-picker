@@ -59,6 +59,7 @@ inside the panel:
 | `<CR>` | insert / replace at the cursor (the seeded literal's span) |
 | `y` | yank the formatted color |
 | `p` | insert from the live lvim-utils palette (`ui.select`) |
+| `g?` | the keymap **cheatsheet** (also a `help` chip on the footer bar) |
 | `q` / `<Esc>` | cancel |
 
 **Mode and Output are independent** — `m` only changes which sliders you edit, `o` only the inserted
@@ -119,11 +120,32 @@ require("lvim-color-picker").setup({
         output = "hex", -- "hex" | "rgb" | "hsl": the syntax it inserts/yanks
         alpha = "auto", -- "auto"/true show the A slider (auto emits alpha only when < 1 or the source had it); false hides it
     },
+    -- the slider panel's LIVE keys (the `g?` cheatsheet is built from this table)
+    keys = {
+        help = "g?", -- the keymap CHEATSHEET (also a `help` chip on the footer bar)
+        dec1 = "h",
+        inc1 = "l",
+        dec5 = "H",
+        inc5 = "L",
+        dec10 = "<C-h>",
+        inc10 = "<C-l>",
+        next_channel = "j",
+        prev_channel = "k",
+        cycle_mode = "m",
+        cycle_output = "o",
+        toggle_alpha = "a",
+        set_value = "=",
+        insert = "<CR>",
+        yank = "y",
+        palette = "p",
+        close = "q",
+    },
     -- the inline highlighter
     highlighter = {
         auto = { "css", "scss", "sass", "less", "html", "conf", "lua" },
         style = "bg", -- "bg" | "fg" | "virtual"
         named = false, -- match CSS named colors (collides with words — enable per ft)
+        chip_icon = "󰝤 ", -- the `virtual` style's swatch glyph (trailing space = gap)
     },
     -- the converter rotation
     convert_cycle = { "hex", "rgb", "hsl" },

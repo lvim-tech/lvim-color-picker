@@ -585,6 +585,48 @@ end
 --- Open the picker, seeded from the color under the cursor (else black). The panel is centered,
 --- themed and cursor-hidden; every mutation repaints through the provider.
 ---@return nil
+-- ── the help window (the canonical cheatsheet) ───────────────────────────────
+
+-- Key id → description, in display order. Built from the LIVE `config.keys`, so a rebind shows up.
+---@type { [1]: string, [2]: string }[]
+local HELP = {
+    { "prev_channel", "focus the previous slider" },
+    { "next_channel", "focus the next slider" },
+    { "dec1", "step the channel down by 1" },
+    { "inc1", "step the channel up by 1" },
+    { "dec5", "step the channel down by 5" },
+    { "inc5", "step the channel up by 5" },
+    { "dec10", "step the channel down by 10" },
+    { "inc10", "step the channel up by 10" },
+    { "set_value", "type an exact value for the channel" },
+    { "cycle_mode", "cycle the sliders: rgb → hsl → cmyk" },
+    { "cycle_output", "cycle the output: hex → rgb → hsl → cmyk" },
+    { "toggle_alpha", "show / hide the alpha slider" },
+    { "insert", "insert the color at the cursor" },
+    { "yank", "yank the color" },
+    { "palette", "open the palette picker" },
+    { "help", "this help" },
+    { "close", "close the picker" },
+}
+
+--- The picker's keymap cheatsheet — the shared `lvim-ui.help` component owns the rows, the striping, the
+--- colours and the window; this only supplies the plugin's LIVE keys.
+local function show_help()
+    local k = config.keys or {}
+    local items = {}
+    for _, e in ipairs(HELP) do
+        local lhs = k[e[1]]
+        if lhs and lhs ~= "" then
+            items[#items + 1] = { lhs, e[2] }
+        end
+    end
+    require("lvim-ui").help({
+        title = "Color picker keymaps",
+        items = items,
+        close_keys = { k.close or "q", "<Esc>", k.help or "g?" },
+    })
+end
+
 function M.open()
     local win = api.nvim_get_current_win()
     -- If a transient FLOAT is current (an LSP progress / notification popup can grab it right as the
@@ -686,6 +728,7 @@ function M.open()
         end,
         keys = function(map, p, state)
             pan = p
+            local k = config.keys
             -- The close function lives on `state` (3rd arg), not the panel handle `p`.
             local close = function()
                 state.close()
@@ -722,26 +765,26 @@ function M.open()
             -- h/l step the focused channel; three step sizes on the same axis (ccc's ±1/±5/±10):
             --   h/l = ±1   H/L = ±5   <C-h>/<C-l> = ±10. <C-k>/<C-j> are left to the surface — they
             -- move the focus DOWN to the footer action bar (and back).
-            map("h", function()
+            map(k.dec1, function()
                 step(-1)
             end)
-            map("l", function()
+            map(k.inc1, function()
                 step(1)
             end)
-            map("H", function()
+            map(k.dec5, function()
                 step(-5)
             end)
-            map("L", function()
+            map(k.inc5, function()
                 step(5)
             end)
-            map("<C-h>", function()
+            map(k.dec10, function()
                 step(-10)
             end)
-            map("<C-l>", function()
+            map(k.inc10, function()
                 step(10)
             end)
-            map("j", refresh_move(1))
-            map("k", refresh_move(-1))
+            map(k.next_channel, refresh_move(1))
+            map(k.prev_channel, refresh_move(-1))
             map("<Down>", refresh_move(1))
             map("<Up>", refresh_move(-1))
             -- advance `cur` to the next entry of `cyc` (wraps)
@@ -753,25 +796,25 @@ function M.open()
                 end
                 return cyc[1]
             end
-            map("m", function()
+            map(k.cycle_mode, function()
                 -- Mode + Output are INDEPENDENT: `m` only cycles the sliders, `o` only the output
                 st.mode = next_in({ "rgb", "hsl", "cmyk" }, st.mode)
                 last_mode = st.mode
                 redraw(true) -- the channel count can change (cmyk has 4) → resize + repaint header
             end)
-            map("o", function()
+            map(k.cycle_output, function()
                 st.output = next_in({ "hex", "rgb", "hsl", "cmyk" }, st.output)
                 last_output = st.output -- remember for the next picker session
                 redraw(false)
             end)
-            map("a", function()
+            map(k.toggle_alpha, function()
                 st.has_alpha = not st.has_alpha
                 if st.has_alpha and st.color.a == nil then
                     st.color.a = 1
                 end
                 redraw(true) -- the A slider appears/disappears → resize + repaint
             end)
-            map("=", function()
+            map(k.set_value, function()
                 local chn = channels()[current_channel()]
                 if not chn then
                     return
@@ -794,9 +837,10 @@ function M.open()
             -- insert action is bound here. `y` and `p`, by contrast, ARE claimed by the footer bar —
             -- their real actions live in the footer button `run`s below (a provider map would be
             -- clobbered by the footer hotkey).
-            map("<CR>", function()
+            map(k.insert, function()
                 do_insert(close)
             end)
+            map(k.help, show_help)
         end,
     }
 
@@ -807,14 +851,17 @@ function M.open()
         title_pos = "center",
         panel_border = "none",
         size = { width = { auto = true, max = 0.6 }, height = { auto = true, max = 0.8 } },
-        close_keys = { "q", "<Esc>" },
+        close_keys = { config.keys.close, "<Esc>" },
         content = { blocks = { { id = "picker", provider = provider } } },
         footer = {
             bars = {
-                surface.bar({ { "insert", "yank", "palette", "close" } }, {
+                surface.bar({ { "insert", "yank", "palette" }, { "help", "close" } }, {
+                    -- the cheatsheet chip: the panel's keys (three step sizes, the cycles, `=`) are not
+                    -- discoverable from the sliders, so the bar has to say where they are written down
+                    help = { name = "help", key = config.keys.help, run = show_help },
                     insert = {
                         name = "insert",
-                        key = "<CR>",
+                        key = config.keys.insert,
                         run = function(state)
                             do_insert(function()
                                 state.close()
@@ -823,7 +870,7 @@ function M.open()
                     },
                     yank = {
                         name = "yank",
-                        key = "y",
+                        key = config.keys.yank,
                         run = function(state)
                             local text = formatted()
                             vim.fn.setreg('"', text) -- the unnamed register always works (paste with `p`)
@@ -834,7 +881,7 @@ function M.open()
                     },
                     palette = {
                         name = "palette",
-                        key = "p",
+                        key = config.keys.palette,
                         run = function(state)
                             do_palette(function()
                                 state.close()
@@ -843,7 +890,7 @@ function M.open()
                     },
                     close = {
                         name = "close",
-                        key = "q",
+                        key = config.keys.close,
                         run = function(state)
                             state.close()
                         end,

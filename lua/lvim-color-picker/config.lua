@@ -14,9 +14,30 @@
 ---@field auto  string[]           Filetypes the inline highlighter auto-enables in
 ---@field style "bg"|"fg"|"virtual" How a color literal is painted (background / foreground / a chip before it)
 ---@field named boolean            Match CSS named colors (off outside css/scss/html is safest — they collide with words)
+---@field chip_icon string          The swatch glyph the `virtual` style paints before the literal (Nerd Font; trailing space = gap)
+
+---@class LvimColorPickerKeys
+---@field help        string  Open the keymap cheatsheet (the set-wide `g?` chord)
+---@field dec1        string  Step the focused channel down by 1
+---@field inc1        string  Step the focused channel up by 1
+---@field dec5        string  Step the focused channel down by 5
+---@field inc5        string  Step the focused channel up by 5
+---@field dec10       string  Step the focused channel down by 10
+---@field inc10       string  Step the focused channel up by 10
+---@field next_channel string  Focus the next slider
+---@field prev_channel string  Focus the previous slider
+---@field cycle_mode  string  Cycle the SLIDERS: rgb → hsl → cmyk
+---@field cycle_output string  Cycle the OUTPUT syntax: hex → rgb → hsl → cmyk
+---@field toggle_alpha string  Show / hide the alpha (A) slider
+---@field set_value   string  Type an exact value for the focused channel
+---@field insert      string  Insert the color at the cursor (footer button)
+---@field yank        string  Yank the color (footer button)
+---@field palette     string  Open the palette picker (footer button)
+---@field close       string  Close the panel (footer button)
 
 ---@class LvimColorPickerConfig
 ---@field picker        LvimColorPickerPicker
+---@field keys          LvimColorPickerKeys  The picker panel's keymaps (channels, cycles, footer, the cheatsheet)
 ---@field highlighter   LvimColorPickerHighlighter
 ---@field convert_cycle ("hex"|"rgb"|"hsl")[]  The order the converter rotates a literal through
 
@@ -28,6 +49,28 @@ return {
         mode = "rgb",
         output = "hex",
         alpha = "auto",
+    },
+    -- The slider panel's LIVE keys — the channel stepping (three step sizes on the same axis), the mode /
+    -- output cycles, the footer actions and the cheatsheet chord. The `g?` help window is built from THIS
+    -- table, so a rebind shows up in it.
+    keys = {
+        help = "g?", -- the set-wide cheatsheet chord (the panel owns the `g` prefix — see lvim-ui)
+        dec1 = "h",
+        inc1 = "l",
+        dec5 = "H",
+        inc5 = "L",
+        dec10 = "<C-h>",
+        inc10 = "<C-l>",
+        next_channel = "j",
+        prev_channel = "k",
+        cycle_mode = "m",
+        cycle_output = "o",
+        toggle_alpha = "a",
+        set_value = "=",
+        insert = "<CR>",
+        yank = "y",
+        palette = "p",
+        close = "q",
     },
     -- The inline highlighter: a decoration provider paints color literals in the visible lines. `bg`
     -- tints the literal's background (fg auto-chosen for contrast), `fg` colors the text, `virtual`

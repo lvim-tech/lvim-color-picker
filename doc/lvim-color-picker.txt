@@ -57,6 +57,7 @@ A centered slider panel seeded from the color under the cursor. Keys:
   m                 cycle the [M]ode / slider model (rgb -> hsl -> cmyk)
   o                 cycle the [O]utput syntax (hex -> rgb -> hsl -> cmyk)
   a                 toggle the alpha (A) slider on / off
+  g?                the keymap CHEATSHEET (also a `help` chip on the footer)
   <CR>              insert / replace the seeded span at the cursor
   y                 yank the formatted color
   p                 insert from the live lvim-utils palette
@@ -108,10 +109,21 @@ Defaults (mirrors lua/lvim-color-picker/config.lua): >lua
             output = "hex",
             alpha = "auto",
         },
+        keys = {                  -- the panel's LIVE keys (the g? help window
+            help = "g?",          -- is built from THIS table)
+            dec1 = "h",  inc1 = "l",
+            dec5 = "H",  inc5 = "L",
+            dec10 = "<C-h>", inc10 = "<C-l>",
+            next_channel = "j", prev_channel = "k",
+            cycle_mode = "m", cycle_output = "o",
+            toggle_alpha = "a", set_value = "=",
+            insert = "<CR>", yank = "y", palette = "p", close = "q",
+        },
         highlighter = {
             auto = { "css", "scss", "sass", "less", "html", "conf", "lua" },
             style = "bg",
             named = false,
+            chip_icon = "󰝤 ",     -- the `virtual` style's swatch glyph
         },
         convert_cycle = { "hex", "rgb", "hsl" },
     })
