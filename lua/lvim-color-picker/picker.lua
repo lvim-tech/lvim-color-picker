@@ -193,7 +193,10 @@ local function channels()
                     sync_rgb()
                 end,
                 at = function(value)
-                    local r, g, b = lib.hsl_to_rgb(value, st.hsl.s / 100, st.hsl.l / 100)
+                    -- The HUE bar is a full rainbow at a FIXED vivid reference (S=100%, L=50%): rendered at the
+                    -- current S/L it would wash out to white/black at extreme lightness (e.g. a near-white color's
+                    -- hue bar became solid white) and stop being a rainbow. The handle still marks the true H.
+                    local r, g, b = lib.hsl_to_rgb(value, 1, 0.5)
                     return { r = r, g = g, b = b }
                 end,
             },
@@ -209,7 +212,10 @@ local function channels()
                     sync_rgb()
                 end,
                 at = function(value)
-                    local r, g, b = lib.hsl_to_rgb(st.hsl.h, value / 100, st.hsl.l / 100)
+                    -- The SATURATION bar is drawn at a fixed readable L=50% (gray → full colour at the current
+                    -- hue): at the current L it collapses to white/black for a light/dark colour, hiding the
+                    -- gradient. The handle still marks the true S.
+                    local r, g, b = lib.hsl_to_rgb(st.hsl.h, value / 100, 0.5)
                     return { r = r, g = g, b = b }
                 end,
             },
