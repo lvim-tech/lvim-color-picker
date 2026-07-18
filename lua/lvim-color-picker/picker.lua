@@ -28,40 +28,67 @@ local BAR, POINT = "█", "◊"
 --- titles(3), the button rows(4), blank(5), then the sliders.
 local SLIDER_BASE = 6
 
----@type table<string, string>  "#rrggbb" → cached fg-only group name for a gradient cell
-local bar_groups = {}
---- The (cached) fg-only highlight group painting a gradient cell in `color`.
----@param color LvimColor
----@return string
-local function bar_group(color)
-    local hex = lib.format({ r = color.r, g = color.g, b = color.b }, "hex")
-    local cached = bar_groups[hex]
-    if cached then
-        return cached
+--- Paint one gradient cell's highlight group, keyed by its POSITION (row + cell) rather than its
+--- colour, and redefine it in place each render. Positional names bound the group set to the panel
+--- geometry (≈ rows × cells), so dragging a slider through the colour space reuses the same handful
+--- of groups instead of minting a new global group per distinct colour (which never got freed and
+--- grew without bound over an interactive session). `nvim_set_hl` on an existing name overwrites it.
+---@param rowidx integer  1-based panel row of the slider
+---@param cell integer    1-based cell inside the track
+---@param color LvimColor the gradient colour at this cell
+---@param handle boolean  true for the `◊` value cell (bg-painted + contrast fg), false for a track cell (fg only)
+---@return string  the group name to attach to the cell
+local function cell_group(rowidx, cell, color, handle)
+    local name = ("LvimColorPickerCell_%d_%d"):format(rowidx, cell)
+    if handle then
+        -- the handle cell: the gradient colour dimmed 50% as bg (so the ◊ reads AND the colour shows
+        -- through), a contrast fg so the diamond stays visible over it
+        local dark = { r = color.r * 0.5, g = color.g * 0.5, b = color.b * 0.5 }
+        api.nvim_set_hl(0, name, {
+            bg = lib.format(dark, "hex"),
+            fg = lib.luminance(dark) > 0.5 and "#000000" or "#ffffff",
+        })
+    else
+        api.nvim_set_hl(0, name, { fg = lib.format({ r = color.r, g = color.g, b = color.b }, "hex") })
     end
-    local name = "LvimColorPickerBar_" .. hex:sub(2)
-    api.nvim_set_hl(0, name, { fg = hex })
-    bar_groups[hex] = name
     return name
 end
 
----@type table<string, string>  "#rrggbb" → cached handle group name
-local handle_groups = {}
---- The (cached) highlight group for the `◊` handle cell: the gradient color at that point with a 50%
---- black overlay (so the colour still reads through), a contrast fg so the diamond stays visible.
----@param color LvimColor
----@return string
-local function handle_group(color)
-    local dark = { r = color.r * 0.5, g = color.g * 0.5, b = color.b * 0.5 }
-    local hex = lib.format(dark, "hex")
-    local cached = handle_groups[hex]
-    if cached then
-        return cached
+--- The [M]ode slider-model chips and the [O]utput syntax chips (label text + value). Module-level so
+--- the panel WIDTH (size()) and the RENDER agree on the chip geometry — adding a chip widens the panel
+--- to keep the columns aligned. `hex0x` ("0x") is an OUTPUT-only syntax (the numeric Lua/Neovim literal
+--- `0xRRGGBB`, so a `0x…` config value edited by the picker round-trips as `0x…`); it is rgb in base-16
+--- with nothing extra to slide, so it is never a slider MODE.
+local SEP = 1
+---@type { t: string, v: "rgb"|"hsl"|"cmyk" }[]
+local MODE_BTNS = { { t = " rgb ", v = "rgb" }, { t = " hsl ", v = "hsl" }, { t = " cmyk ", v = "cmyk" } }
+---@type { t: string, v: "hex"|"hex0x"|"rgb"|"hsl"|"cmyk" }[]
+local OUT_BTNS = {
+    { t = " hex ", v = "hex" },
+    { t = " 0x ", v = "hex0x" },
+    { t = " rgb ", v = "rgb" },
+    { t = " hsl ", v = "hsl" },
+    { t = " cmyk ", v = "cmyk" },
+}
+
+--- Total display width of a chip group (each chip is ASCII, so bytes == display cells) + the SEP
+--- between chips.
+---@param btns { t: string }[]
+---@return integer
+local function group_width(btns)
+    local total = 0
+    for i, b in ipairs(btns) do
+        total = total + #b.t + (i > 1 and SEP or 0)
     end
-    local name = "LvimColorPickerHandle_" .. hex:sub(2)
-    api.nvim_set_hl(0, name, { bg = hex, fg = lib.luminance(dark) > 0.5 and "#000000" or "#ffffff" })
-    handle_groups[hex] = name
-    return name
+    return total
+end
+
+--- The panel content width: 2-col left margin + [M]ode group + 1 space + │ + 1 space + [O]utput group
+--- + 2-col right margin (= 2 + mode + 5 + output). Derived from the chip geometry so the layout stays
+--- aligned when a chip is added/removed.
+---@return integer
+local function panel_width()
+    return 2 + group_width(MODE_BTNS) + 5 + group_width(OUT_BTNS)
 end
 
 ---@class LvimColorPickerState
@@ -69,7 +96,7 @@ end
 ---@field hsl { h: number, s: number, l: number }  the HSL view (h 0..360, s/l 0..100)
 ---@field cmyk { c: number, m: number, y: number, k: number }  the CMYK view (each 0..100)
 ---@field mode "rgb"|"hsl"|"cmyk"
----@field output "hex"|"rgb"|"hsl"|"cmyk"
+---@field output "hex"|"hex0x"|"rgb"|"hsl"|"cmyk"
 ---@field has_alpha boolean          whether the A slider is shown
 ---@field source_had_alpha boolean   the seeded literal carried an alpha channel
 ---@field always_emit_alpha boolean  config alpha = true: always write the alpha channel
@@ -110,7 +137,7 @@ local slider_geom = {}
 local chip_geom = {}
 ---@type "rgb"|"hsl"|"cmyk"|nil  the last-used slider mode, remembered across picker sessions (nil = use config)
 local last_mode = nil
----@type "hex"|"rgb"|"hsl"|"cmyk"|nil  the last-used output syntax, remembered across sessions
+---@type "hex"|"hex0x"|"rgb"|"hsl"|"cmyk"|nil  the last-used output syntax, remembered across sessions
 local last_output = nil
 
 --- Recompute the HSL view from the authoritative RGB.
@@ -368,26 +395,16 @@ local function render(width)
     end
     -- [M]ode group hugs the LEFT (2-space margin); [O]utput hugs the RIGHT (2-space margin); a │ divider
     -- sits ONE plain space after the mode group (and one before the output). Titles centered over each.
-    local mode_btns = {
-        { t = " rgb ", v = "rgb", on = st.mode == "rgb" },
-        { t = " hsl ", v = "hsl", on = st.mode == "hsl" },
-        { t = " cmyk ", v = "cmyk", on = st.mode == "cmyk" },
-    }
-    local out_btns = {
-        { t = " hex ", v = "hex", on = st.output == "hex" },
-        { t = " rgb ", v = "rgb", on = st.output == "rgb" },
-        { t = " hsl ", v = "hsl", on = st.output == "hsl" },
-        { t = " cmyk ", v = "cmyk", on = st.output == "cmyk" },
-    }
-    local SEP = 1
-    local function group_width(btns)
-        local total = 0
-        for i, b in ipairs(btns) do
-            total = total + #b.t + (i > 1 and SEP or 0)
-        end
-        return total
+    -- Build the display chip lists from the module chip defs, marking the current mode / output `on`.
+    local mode_btns = {}
+    for _, b in ipairs(MODE_BTNS) do
+        mode_btns[#mode_btns + 1] = { t = b.t, v = b.v, on = st.mode == b.v }
     end
-    local mode_w, out_w = group_width(mode_btns), group_width(out_btns)
+    local out_btns = {}
+    for _, b in ipairs(OUT_BTNS) do
+        out_btns[#out_btns + 1] = { t = b.t, v = b.v, on = st.output == b.v }
+    end
+    local mode_w, out_w = group_width(MODE_BTNS), group_width(OUT_BTNS)
     local mode_x = 2 -- 2-space left margin
     local sep_col = mode_x + mode_w + 1 -- the │ one plain space after the mode group
     local out_x = sep_col + 2 -- output one plain space after the │ (its right edge = the 2-space margin)
@@ -468,12 +485,13 @@ local function render(width)
         lines[rowidx] = line
         hls[#hls + 1] = { rowidx - 1, 0, ls, active and "LvimColorPickerLabelActive" or "LvimColorPickerLabel" }
         -- gradient: each cell FG-painted with the color at its midpoint value; the handle cell is a ◊
-        -- over that colour dimmed 50% (handle_group) so the diamond reads AND the colour shows through
+        -- over that colour dimmed 50% so the diamond reads AND the colour shows through. Groups are
+        -- named by POSITION (cell_group) and redefined each render — a bounded set, no per-colour leak.
         for cell = 1, cells_n do
             local value = (cell - 0.5) / cells_n * (chn.max - chn.min) + chn.min
             local c0 = ls + (cell - 1) * 3
             local color = chn.at(value)
-            hls[#hls + 1] = { rowidx - 1, c0, c0 + 3, (cell == point) and handle_group(color) or bar_group(color) }
+            hls[#hls + 1] = { rowidx - 1, c0, c0 + 3, cell_group(rowidx, cell, color, cell == point) }
         end
         hls[#hls + 1] = { rowidx - 1, ls + cells_n * 3, #line, "LvimColorPickerValue" }
     end
@@ -572,11 +590,15 @@ local function do_palette(close)
     })
 end
 
---- The output syntax a literal is written in, from its leading characters (or nil if not a color).
+--- The output syntax a literal is written in, from its leading characters (or nil if not a color). A
+--- `0x…` literal maps to "hex0x" (not "hex") so the picker seeds its output to the numeric form and
+--- inserts `0x…` back — round-tripping the Lua/Neovim config literal instead of breaking it as `#…`.
 ---@param text string
----@return "hex"|"rgb"|"hsl"|"cmyk"|nil
+---@return "hex"|"hex0x"|"rgb"|"hsl"|"cmyk"|nil
 local function detect_format(text)
-    if text:match("^#") or text:match("^0[xX]") then
+    if text:match("^0[xX]") then
+        return "hex0x"
+    elseif text:match("^#") then
         return "hex"
     elseif text:match("^[cC][mM][yY][kK]") then
         return "cmyk"
@@ -655,9 +677,9 @@ function M.open()
     -- rgb()/hsl()/#hex) picks the matching sliders and inserts in the same format by default; falls
     -- back to the remembered / configured values otherwise.
     local src_fmt = hit and detect_format(line:sub(hit.s + 1, hit.e)) or nil
-    -- rgb / hsl / cmyk have matching sliders; hex is an OUTPUT format only (it is rgb in base-16, so
-    -- there is nothing extra to slide) — so it is never a slider mode.
-    local slider_fmt = (src_fmt ~= "hex" and src_fmt or nil) --[[@as "rgb"|"hsl"|"cmyk"|nil]]
+    -- rgb / hsl / cmyk have matching sliders; hex AND hex0x are OUTPUT formats only (both are rgb in
+    -- base-16, so there is nothing extra to slide) — so neither is ever a slider mode.
+    local slider_fmt = (src_fmt ~= "hex" and src_fmt ~= "hex0x" and src_fmt or nil) --[[@as "rgb"|"hsl"|"cmyk"|nil]]
     -- The A slider is shown unless alpha is explicitly disabled (alpha = false). It is always
     -- adjustable, but the output only GAINS an alpha channel when it is meaningful — reduced below 1,
     -- or the seeded literal already carried one (alpha = true forces it always).
@@ -693,8 +715,9 @@ function M.open()
     local provider = {
         hide_cursor = true,
         size = function()
-            -- width 49 = 2 (left margin) + mode group (18) + 1 + │ + 1 + output group (24) + 2 (right)
-            return 49, 5 + #channels()
+            -- width derived from the chip geometry (panel_width) so adding an [O]utput chip keeps the
+            -- [M]ode / [O]utput columns aligned; height = 5 chrome rows + one row per active channel.
+            return panel_width(), 5 + #channels()
         end,
         render = render,
         -- MOUSE: a left-click on a slider sets that channel to the clicked position; a click on a [M]ode /
@@ -809,7 +832,7 @@ function M.open()
                 redraw(true) -- the channel count can change (cmyk has 4) → resize + repaint header
             end)
             map(k.cycle_output, function()
-                st.output = next_in({ "hex", "rgb", "hsl", "cmyk" }, st.output)
+                st.output = next_in({ "hex", "hex0x", "rgb", "hsl", "cmyk" }, st.output)
                 last_output = st.output -- remember for the next picker session
                 redraw(false)
             end)

@@ -54,7 +54,7 @@ inside the panel:
 | `<C-h>` / `<C-l>` | step −10 / +10 |
 | `=` | enter an exact value for the channel (lvim-ui input) |
 | `m` | cycle the `[M]ode` / slider model (`rgb` → `hsl` → `cmyk`) |
-| `o` | cycle the `[O]utput` syntax (`hex` → `rgb` → `hsl` → `cmyk`) |
+| `o` | cycle the `[O]utput` syntax (`hex` → `0x` → `rgb` → `hsl` → `cmyk`) |
 | `a` | toggle the alpha (`A`) slider on / off |
 | `<CR>` | insert / replace at the cursor (the seeded literal's span) |
 | `y` | yank the formatted color |
@@ -74,7 +74,8 @@ Each slider is a **gradient** — every cell is painted with the actual color at
 bar is a real rainbow), a hollow diamond `◊` marks the current value. Top to bottom: a full-width
 **preview swatch** of the current color (composited over the theme bg by its alpha); the `[M]ode` /
 `[O]utput` titles; the two button rows split 50/50 with a `│` between them; then the sliders. On open,
-the mode + output are seeded from the format of the literal under the cursor.
+the mode + output are seeded from the format of the literal under the cursor — so a numeric `0xRRGGBB`
+Lua literal seeds the `0x` output and inserts back as `0x…` (it round-trips, never rewritten to `#…`).
 
 ## Converter
 
@@ -116,8 +117,8 @@ The full default `setup()` options, kept in sync with `lua/lvim-color-picker/con
 require("lvim-color-picker").setup({
     -- the slider panel
     picker = {
-        mode = "rgb", -- "rgb" | "hsl": which sliders it opens with
-        output = "hex", -- "hex" | "rgb" | "hsl": the syntax it inserts/yanks
+        mode = "rgb", -- "rgb" | "hsl" | "cmyk": which sliders it opens with
+        output = "hex", -- "hex" | "hex0x" | "rgb" | "hsl" | "cmyk": the syntax it inserts/yanks ("hex0x" = the numeric 0xRRGGBB Lua literal)
         alpha = "auto", -- "auto"/true show the A slider (auto emits alpha only when < 1 or the source had it); false hides it
     },
     -- the slider panel's LIVE keys (the `g?` cheatsheet is built from this table)
@@ -147,7 +148,7 @@ require("lvim-color-picker").setup({
         named = false, -- match CSS named colors (collides with words — enable per ft)
         chip_icon = "󰝤 ", -- the `virtual` style's swatch glyph (trailing space = gap)
     },
-    -- the converter rotation
+    -- the converter rotation (add "hex0x" to keep numeric 0xRRGGBB literals through the cycle)
     convert_cycle = { "hex", "rgb", "hsl" },
 })
 ```

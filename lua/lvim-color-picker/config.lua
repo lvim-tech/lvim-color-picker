@@ -7,7 +7,7 @@
 
 ---@class LvimColorPickerPicker
 ---@field mode   "rgb"|"hsl"|"cmyk"       Which sliders the panel opens with (`m` cycles rgb→hsl→cmyk)
----@field output "hex"|"rgb"|"hsl"|"cmyk" The output syntax the panel inserts/yanks in (`o` cycles it)
+---@field output "hex"|"hex0x"|"rgb"|"hsl"|"cmyk" The output syntax the panel inserts/yanks in (`o` cycles it; `hex0x` = the numeric `0xRRGGBB` Lua literal)
 ---@field alpha  "auto"|boolean    "auto"/true = show the A slider (auto emits alpha only when < 1 or the source had it; true always emits); false = no A slider
 
 ---@class LvimColorPickerHighlighter
@@ -39,7 +39,7 @@
 ---@field picker        LvimColorPickerPicker
 ---@field keys          LvimColorPickerKeys  The picker panel's keymaps (channels, cycles, footer, the cheatsheet)
 ---@field highlighter   LvimColorPickerHighlighter
----@field convert_cycle ("hex"|"rgb"|"hsl")[]  The order the converter rotates a literal through
+---@field convert_cycle ("hex"|"hex0x"|"rgb"|"hsl")[]  The order the converter rotates a literal through (add `hex0x` to keep numeric `0xRRGGBB` literals)
 
 ---@type LvimColorPickerConfig
 return {

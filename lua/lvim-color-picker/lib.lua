@@ -128,9 +128,11 @@ end
 -- ── format ──────────────────────────────────────────────────────────────────
 
 --- Format a color into one of the supported syntaxes: "hex" (#rrggbb / #rrggbbaa),
---- "rgb" (rgb()/rgba()), "hsl" (hsl()/hsla()). Alpha is emitted only when present.
+--- "hex0x" (0xrrggbb — the numeric Lua/Neovim literal, ALPHA-LESS), "rgb" (rgb()/rgba()),
+--- "hsl" (hsl()/hsla()), "cmyk". Alpha is emitted only when present (never for hex0x/cmyk —
+--- neither form carries an alpha channel, so a `0xRRGGBB` config literal round-trips unchanged).
 ---@param color LvimColor
----@param syntax "hex"|"rgb"|"hsl"|"cmyk"
+---@param syntax "hex"|"hex0x"|"rgb"|"hsl"|"cmyk"
 ---@return string
 function M.format(color, syntax)
     local r = round(clamp(color.r, 0, 255))
@@ -157,6 +159,11 @@ function M.format(color, syntax)
         -- CMYK is a subtractive, alpha-less model — the alpha channel is dropped
         local c, m, y, k = M.rgb_to_cmyk(r, g, b)
         return ("cmyk(%d%%, %d%%, %d%%, %d%%)"):format(round(c * 100), round(m * 100), round(y * 100), round(k * 100))
+    elseif syntax == "hex0x" then
+        -- The numeric Lua/Neovim `0xRRGGBB` literal: a plain integer, so no `#` and no alpha channel
+        -- (an `0x…AA` is not a color literal Lua/Neovim would read) — this lets a `0x…` config value
+        -- edited by the picker round-trip as `0x…` instead of being rewritten to `#…` (a syntax error).
+        return ("0x%02x%02x%02x"):format(r, g, b)
     end
     -- hex
     if a then
@@ -202,6 +209,23 @@ local function split_args(body)
     return out
 end
 
+--- Parse a CSS alpha token into the 0..1 contract. A percentage (`50%`) is divided by 100; a bare
+--- number (`0.5`, or a stray `1.5`) is taken as-is. Both are clamped to 0..1, so the stored alpha
+--- always matches the `LvimColor.a` contract. nil / unparseable token → nil (opaque, no channel).
+---@param tok string|nil
+---@return number|nil
+local function parse_alpha(tok)
+    if not tok then
+        return nil
+    end
+    local is_pct = tok:find("%%") ~= nil
+    local n = tonumber((tok:gsub("%%", "")))
+    if not n then
+        return nil
+    end
+    return clamp(is_pct and n / 100 or n, 0, 1)
+end
+
 --- Parse the argument list of an rgb()/rgba() into a color, or nil.
 ---@param body string
 ---@return LvimColor|nil
@@ -218,7 +242,7 @@ local function parse_rgb_body(body)
         r = round(clamp(r, 0, 255)),
         g = round(clamp(g, 0, 255)),
         b = round(clamp(b, 0, 255)),
-        a = a[4] and tonumber((a[4]:gsub("%%", ""))),
+        a = parse_alpha(a[4]),
     }
 end
 
@@ -237,7 +261,7 @@ local function parse_hsl_body(body)
         return nil
     end
     local r, g, b = M.hsl_to_rgb(h, s / 100, l / 100)
-    return { r = r, g = g, b = b, a = a[4] and tonumber((a[4]:gsub("%%", ""))) }
+    return { r = r, g = g, b = b, a = parse_alpha(a[4]) }
 end
 
 --- Parse the argument list of a cmyk() into a color, or nil (CMYK carries no alpha).
@@ -348,24 +372,28 @@ function M.parse_all(line, named)
     return out
 end
 
---- The color occurrence containing (or nearest after) 0-based byte `col` on `line`, or nil — the
---- picker/converter seed and the replace target.
+--- The color occurrence containing 0-based byte `col` on `line`, else the one NEAREST to `col` by
+--- byte distance (a color after the cursor and one before it are weighed the same), or nil if the
+--- line has none — the picker/converter seed and the replace target. Nearest-by-distance (not "the
+--- first on the line") so a cursor sitting past every literal edits the closest one, not a far one.
 ---@param line string
 ---@param col integer  0-based byte col
 ---@param named? boolean
 ---@return { color: LvimColor, s: integer, e: integer }|nil
 function M.parse_at(line, col, named)
     local all = M.parse_all(line, named)
-    local nearest
+    local best, best_dist
     for _, h in ipairs(all) do
         if col >= h.s and col < h.e then
             return h
         end
-        if h.s >= col and not nearest then
-            nearest = h
+        -- gap in bytes from `col` to the span (spans are [s, e), so the last byte is e-1)
+        local dist = col < h.s and (h.s - col) or (col - (h.e - 1))
+        if not best_dist or dist < best_dist then
+            best, best_dist = h, dist
         end
     end
-    return nearest or all[1]
+    return best
 end
 
 --- Standard CSS named colors → 6-digit hex bodies (matched only when `named` is enabled).

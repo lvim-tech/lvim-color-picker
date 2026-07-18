@@ -55,7 +55,7 @@ A centered slider panel seeded from the color under the cursor. Keys:
   <C-h> / <C-l>     step -10 / +10
   =                 enter an exact value (lvim-ui input)
   m                 cycle the [M]ode / slider model (rgb -> hsl -> cmyk)
-  o                 cycle the [O]utput syntax (hex -> rgb -> hsl -> cmyk)
+  o                 cycle the [O]utput syntax (hex -> 0x -> rgb -> hsl -> cmyk)
   a                 toggle the alpha (A) slider on / off
   g?                the keymap CHEATSHEET (also a `help` chip on the footer)
   <CR>              insert / replace the seeded span at the cursor
@@ -66,7 +66,9 @@ A centered slider panel seeded from the color under the cursor. Keys:
 Each slider is a GRADIENT — every cell shows the actual color at that point
 (the H bar is a real rainbow), a hollow diamond ◊ marking the current value.
 The top band is a full-width preview swatch (composited over the theme bg by
-its alpha); below it the Mode/Output columns, then the sliders.
+its alpha); below it the Mode/Output columns, then the sliders. The mode + output
+are seeded from the format of the literal under the cursor, so a numeric 0xRRGGBB
+Lua literal seeds the `0x` output and round-trips as 0x… (never rewritten to #…).
 
 Mouse ~
 Left-click a point on a slider track to set that channel to the clicked
@@ -82,7 +84,8 @@ empty.
     :LvimColorPicker convert
 <
 Rewrites the literal under the cursor in the next syntax of `convert_cycle`
-(hex -> rgb() -> hsl() -> ...), preserving alpha. Dot-repeatable via the map: >lua
+(hex -> rgb() -> hsl() -> ...), preserving alpha. Add "hex0x" to the cycle to keep
+numeric 0xRRGGBB literals. Dot-repeatable via the map: >lua
 
     vim.keymap.set("n", "<leader>cc", "<Plug>(lvim-color-picker-convert)")
 <
