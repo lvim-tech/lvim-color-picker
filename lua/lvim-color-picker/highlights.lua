@@ -15,8 +15,9 @@ local M = {}
 ---@return table<string, table>
 function M.build()
     return {
-        -- (the slider tracks are painted per-cell at runtime with LvimColorPickerBar_<hex> gradient
-        -- groups, so no static track accents live here — see picker.lua bar_group)
+        -- (the slider tracks are painted per-cell at runtime with positional
+        -- LvimColorPickerCell_<row>_<cell> groups, redefined in place each render, so no static
+        -- track accents live here — see picker.lua cell_group)
         -- channel labels (R/G/B/H/S/L/…) — blue; the focused (active) row yellow. Value = yellow fg
         -- straight on the panel bg (no tint block).
         LvimColorPickerLabel = { fg = c.blue, bold = true },

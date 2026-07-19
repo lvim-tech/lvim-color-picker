@@ -661,7 +661,9 @@ function M.open()
     -- command fires), seed from the real editor window instead — otherwise the picker reads the
     -- popup's text, not the code under the cursor.
     if api.nvim_win_get_config(win).relative ~= "" then
-        for _, w in ipairs(api.nvim_list_wins()) do
+        -- Only the CURRENT tabpage's windows: nvim_list_wins() spans every tab, so its first
+        -- non-float could be a window in another tab the user isn't looking at.
+        for _, w in ipairs(api.nvim_tabpage_list_wins(0)) do
             if api.nvim_win_get_config(w).relative == "" then
                 win = w
                 break
@@ -686,7 +688,10 @@ function M.open()
     local alpha_cfg = config.picker.alpha
     local has_alpha = alpha_cfg ~= false
     st = {
-        color = { r = seed.r, g = seed.g, b = seed.b, a = has_alpha and (seed.a or 1) or nil },
+        -- Keep the source's alpha even when alpha = false (that config only HIDES the A slider — it
+        -- must not silently strip #rrggbbaa → #rrggbb on confirm). has_alpha gates the slider;
+        -- source_had_alpha + formatted() round-trip the channel.
+        color = { r = seed.r, g = seed.g, b = seed.b, a = seed.a or (has_alpha and 1 or nil) },
         hsl = { h = 0, s = 0, l = 0 },
         cmyk = { c = 0, m = 0, y = 0, k = 100 },
         mode = slider_fmt or last_mode or config.picker.mode,
