@@ -731,14 +731,13 @@ function M.open()
         -- the clicked row (so the row is focused + the ▸R◂ marker follows) and passes the 1-based `line` +
         -- 0-based byte `col`. Hit-testing is in DISPLAY columns (the row has a multibyte label / │ divider), so
         -- it maps to the exact cell. No-op off the track / any chip. `'mouse'` empty ⇒ never invoked.
-        ---@param _pan table
-        ---@param _st table
-        ---@param line integer  1-based clicked buffer row
-        ---@param col integer   0-based clicked byte column
-        on_click = function(_pan, _st, line, col)
-            local text = api.nvim_buf_get_lines(pan.buf, line - 1, line, false)[1] or ""
+        -- The chassis passes (panel, state, line, col); the first two are its own handles, unused here.
+        ---@param row integer  1-based clicked buffer row
+        ---@param col integer  0-based clicked byte column
+        on_click = function(_, _, row, col)
+            local text = api.nvim_buf_get_lines(pan.buf, row - 1, row, false)[1] or ""
             local dcol = vim.fn.strdisplaywidth(text:sub(1, col)) -- 0-based DISPLAY column of the clicked cell
-            local sg = slider_geom[line]
+            local sg = slider_geom[row]
             if sg then
                 local cell = dcol - sg.label_dw + 1 -- 1-based cell inside the track
                 if cell >= 1 and cell <= sg.cells_n then
@@ -754,7 +753,7 @@ function M.open()
                 return
             end
             for _, chip in ipairs(chip_geom) do
-                if chip.row == line and dcol >= chip.dc0 and dcol < chip.dc1 then
+                if chip.row == row and dcol >= chip.dc0 and dcol < chip.dc1 then
                     chip.set()
                     return
                 end
