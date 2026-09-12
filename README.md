@@ -11,7 +11,7 @@ round-trips.
 
 ## Requirements
 
-Requires **Neovim >= 0.10**, [lvim-ui](https://github.com/lvim-tech/lvim-ui) (the picker panel + the
+Requires **Neovim >= 0.12**, [lvim-ui](https://github.com/lvim-tech/lvim-ui) (the picker panel + the
 palette select) and [lvim-utils](https://github.com/lvim-tech/lvim-utils) (the panel accents + the
 live palette the `p` action draws from).
 

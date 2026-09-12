@@ -27,7 +27,7 @@ and (gated) CSS named colors, and round-trips RGB<->HSL.
 ==============================================================================
 2. REQUIREMENTS                                    *lvim-color-picker-requirements*
 
-  - Neovim >= 0.10
+  - Neovim >= 0.12
   - lvim-ui       the picker panel + the palette select
   - lvim-utils    the panel accents + the live palette for `p`
 
