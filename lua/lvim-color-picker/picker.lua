@@ -465,7 +465,7 @@ local function render(width)
         local v = chn.get()
         -- active row: the channel letter is FLUSH-framed by small inward pointers (▸R◂); inactive
         -- rows pad to the same 5-cell width so R stays column-aligned and the tracks line up
-        local label = active and (" ▸" .. chn.key .. "◂ ") or ("  " .. chn.key .. "  ")
+        local label = active and (" \u{f0142}" .. chn.key .. "\u{f0141} ") or ("  " .. chn.key .. "  ")
         local ls = #label
         -- the track fills to the right, reserving the last 7 columns for the value: 2 spaces + 3-wide
         -- number + 2 spaces
